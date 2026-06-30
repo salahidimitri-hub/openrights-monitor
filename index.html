@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#080C14">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="FindMe">
+  <meta name="description" content="Find people in crowds using Bluetooth compass tracking">
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <title>FindMe – Crowd Locator</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- ══ SETUP SCREEN (first launch) ══ -->
+<div id="setup-screen" class="fullscreen-overlay">
+  <div class="setup-card">
+    <div class="setup-logo">FINDME</div>
+    <div class="setup-icon">📡</div>
+    <h2>Find anyone in a crowd</h2>
+    <p>Uses Bluetooth + your compass to point you directly to the person you're looking for — no GPS needed.</p>
+    <div class="setup-steps">
+      <div class="setup-step"><span>1</span> Enter your name</div>
+      <div class="setup-step"><span>2</span> Share the app link with your group</div>
+      <div class="setup-step"><span>3</span> Tap "My Signal" to broadcast, or "Finder" to track</div>
+    </div>
+    <input class="setup-input" id="setup-name" type="text" placeholder="Your name (e.g. Alex)" maxlength="20">
+    <button class="btn-primary" onclick="App.setup()">Get Started →</button>
+    <div class="pwa-hint" id="pwa-hint"></div>
+  </div>
+</div>
+
+<!-- ══ PERMISSION SCREEN ══ -->
+<div id="perm-screen" class="fullscreen-overlay hidden">
+  <div class="setup-card">
+    <div class="perm-icon">🔒</div>
+    <h2>Permissions needed</h2>
+    <p>FindMe needs these to work. All data stays on-device — nothing is sent to any server.</p>
+    <div class="perm-list" id="perm-list">
+      <div class="perm-item" id="perm-bluetooth">
+        <span class="perm-icon-sm">🔵</span>
+        <div>
+          <div class="perm-name">Bluetooth</div>
+          <div class="perm-desc">Detect nearby devices & measure signal strength</div>
+        </div>
+        <span class="perm-status" id="ps-bluetooth">⏳</span>
+      </div>
+      <div class="perm-item" id="perm-compass">
+        <span class="perm-icon-sm">🧭</span>
+        <div>
+          <div class="perm-name">Device Orientation</div>
+          <div class="perm-desc">Read compass heading for the direction arrow</div>
+        </div>
+        <span class="perm-status" id="ps-compass">⏳</span>
+      </div>
+    </div>
+    <button class="btn-primary" id="perm-btn" onclick="App.requestPermissions()">Allow Permissions</button>
+    <button class="btn-ghost" onclick="App.skipPermissions()">Continue without (demo mode)</button>
+  </div>
+</div>
+
+<!-- ══ MAIN APP ══ -->
+<div id="main-app" class="hidden">
+
+  <div class="topbar">
+    <div class="logo">FINDME</div>
+    <div class="topbar-right">
+      <div class="my-name-badge" id="my-name-badge"></div>
+      <div class="bt-badge" id="bt-badge"><div class="bt-dot"></div><span id="bt-label">BT</span></div>
+    </div>
+  </div>
+
+  <div class="tabs">
+    <button class="tab active" data-tab="finder" onclick="App.switchTab('finder')">🧭 Finder</button>
+    <button class="tab" data-tab="messages" onclick="App.switchTab('messages')">💬 Chat <span class="unread-badge hidden" id="unread-badge">0</span></button>
+    <button class="tab" data-tab="signal" onclick="App.switchTab('signal')">📡 My Signal</button>
+  </div>
+
+  <!-- ═══ FINDER SCREEN ═══ -->
+  <div class="screen active" id="screen-finder">
+    <div class="section-label">Nearby — tap to track</div>
+
+    <div id="nearby-list">
+      <div class="empty-nearby" id="empty-nearby">
+        <div style="font-size:32px;margin-bottom:8px">🔍</div>
+        <div>Scanning for nearby FindMe users…</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:4px">Make sure they have "My Signal" active</div>
+        <div class="scan-spinner"></div>
+      </div>
+    </div>
+
+    <!-- COMPASS -->
+    <div class="compass-wrap" id="compass-wrap">
+      <div class="compass-label" id="compass-label">SELECT SOMEONE TO TRACK</div>
+
+      <div class="compass-ring-wrap" id="compass-ring-wrap">
+        <span class="cardinal card-N">N</span>
+        <span class="cardinal card-S">S</span>
+        <span class="cardinal card-E">E</span>
+        <span class="cardinal card-W">W</span>
+
+        <svg class="compass-svg" viewBox="0 0 220 220" id="compass-svg">
+          <circle cx="110" cy="110" r="100" fill="none" stroke="rgba(0,229,255,0.08)" stroke-width="1"/>
+          <circle cx="110" cy="110" r="90"  fill="none" stroke="rgba(0,229,255,0.04)" stroke-width="1"/>
+          <g id="tick-marks"></g>
+          <!-- heading arc (fills as you rotate toward target) -->
+          <path id="heading-arc" fill="none" stroke="rgba(0,229,255,0.25)" stroke-width="3" stroke-linecap="round"/>
+        </svg>
+
+        <div class="compass-arrow-wrap" id="compass-arrow">
+          <div class="arrow-body" id="arrow-body"></div>
+        </div>
+        <div class="compass-center"><div class="compass-center-dot"></div></div>
+
+        <!-- "target" dot on ring -->
+        <div class="target-dot" id="target-dot" style="display:none"></div>
+      </div>
+
+      <!-- Distance & heading readout -->
+      <div class="readout-row">
+        <div class="readout-box">
+          <div class="readout-val" id="dist-num">—</div>
+          <div class="readout-lbl">METERS</div>
+        </div>
+        <div class="readout-divider"></div>
+        <div class="readout-box">
+          <div class="readout-val" id="heading-num">—°</div>
+          <div class="readout-lbl">HEADING</div>
+        </div>
+        <div class="readout-divider"></div>
+        <div class="readout-box">
+          <div class="readout-val" id="rssi-num">—</div>
+          <div class="readout-lbl">RSSI dBm</div>
+        </div>
+      </div>
+    </div>
+
+    <button class="btn-primary btn-find hidden" id="find-btn" onclick="App.toggleTracking()">▶ START TRACKING</button>
+    <div class="mode-tag" id="mode-tag">📡 Demo Mode — install app on both devices for live BT</div>
+  </div>
+
+  <!-- ═══ MESSAGES SCREEN ═══ -->
+  <div class="screen hidden" id="screen-messages">
+
+    <div id="no-chat-msg" style="text-align:center;padding:48px 20px;color:var(--muted)">
+      <div style="font-size:36px;margin-bottom:12px">💬</div>
+      <div style="font-size:15px;font-weight:600;color:var(--text);margin-bottom:6px">No conversations yet</div>
+      <div style="font-size:13px">Find someone nearby and start tracking — a chat will open automatically.</div>
+    </div>
+
+    <div id="chat-ui" class="hidden">
+      <div class="chat-header">
+        <div class="avatar" id="chat-avatar">?</div>
+        <div class="online-dot"></div>
+        <div class="chat-name" id="chat-name">—</div>
+        <button class="locate-btn" onclick="App.locateFromChat()">🧭 Locate</button>
+      </div>
+
+      <div class="chat-window" id="chat-window"></div>
+
+      <div class="quick-replies" id="quick-replies">
+        <button class="qr" onclick="App.sendQuick('On my way! 🏃')">On my way! 🏃</button>
+        <button class="qr" onclick="App.sendQuick('I can see you! 👋')">I see you!</button>
+        <button class="qr" onclick="App.sendQuick('Wait there, stay put')">Wait there</button>
+        <button class="qr" onclick="App.sendQuick('Almost there — almost at 0m!')">Almost there!</button>
+        <button class="qr" onclick="App.sendQuick('Which direction are you facing?')">Which way?</button>
+      </div>
+
+      <div class="chat-input-row">
+        <input class="chat-input" id="msg-input" type="text" placeholder="Message…" maxlength="200"
+          onkeydown="if(event.key==='Enter')App.sendMsg()">
+        <button class="send-btn" onclick="App.sendMsg()">➤</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ MY SIGNAL SCREEN ═══ -->
+  <div class="screen hidden" id="screen-signal">
+
+    <div class="signal-card">
+      <div class="signal-ring-wrap" id="signal-ring-wrap">
+        <div class="ring r1"></div>
+        <div class="ring r2"></div>
+        <div class="ring r3"></div>
+        <button class="signal-btn" id="signal-btn" onclick="App.toggleSignal()">
+          <span id="signal-icon">📡</span>
+        </button>
+      </div>
+      <div class="signal-title" id="signal-title">Tap to broadcast</div>
+      <div class="signal-desc" id="signal-desc">When active, your name appears in nearby FindMe users' scanner — they can lock onto you with the compass.</div>
+    </div>
+
+    <div class="stat-row">
+      <div class="stat-box"><div class="stat-val" id="stat-seekers">0</div><div class="stat-lbl">SEEKING YOU</div></div>
+      <div class="stat-box"><div class="stat-val" id="stat-range">—</div><div class="stat-lbl">BT RANGE (m)</div></div>
+      <div class="stat-box"><div class="stat-val" id="stat-time">0s</div><div class="stat-lbl">BROADCAST</div></div>
+    </div>
+
+    <div class="seeker-card">
+      <div class="section-label" style="margin-bottom:12px">Who's tracking you</div>
+      <div id="seeker-list"><div class="empty-seekers">No seekers yet</div></div>
+    </div>
+
+    <div class="share-card">
+      <div class="section-label" style="margin-bottom:10px">Invite someone</div>
+      <p style="font-size:13px;color:var(--muted);margin-bottom:12px">Share this link — they open it, enter their name, and can find you instantly.</p>
+      <div class="share-url" id="share-url"></div>
+      <button class="btn-primary" onclick="App.shareLink()" style="margin-top:10px">Share FindMe Link 🔗</button>
+    </div>
+  </div>
+
+</div><!-- /main-app -->
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<!-- ARRIVED OVERLAY -->
+<div id="arrived-overlay" class="fullscreen-overlay hidden">
+  <div class="arrived-card">
+    <div class="arrived-emoji">🎉</div>
+    <h2 id="arrived-title">You found them!</h2>
+    <p id="arrived-sub">Distance: 0m</p>
+    <button class="btn-primary" onclick="App.dismissArrived()">Done</button>
+  </div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
