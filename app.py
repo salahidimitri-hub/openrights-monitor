@@ -40,12 +40,25 @@ PORT = int(os.environ.get("PORT", "8000"))
 WINDOW_DAYS = 30
 INGEST_EVERY_SECONDS = 60 * 60  # hourly
 
-# Trusted public feeds. Edit freely. More INDEPENDENT feeds = higher confidence.
+# Trusted public feeds. Edit freely. More INDEPENDENT feeds = higher confidence
+# and broader country coverage. Each source is fetched independently; if any one
+# feed is unreachable or malformed, it simply contributes nothing that cycle --
+# a dead URL can never break ingestion, it just yields zero items. Feeds marked
+# below are a mix of dedicated human-rights monitors and general world-news
+# desks, so corroboration can form ACROSS independent newsrooms, not just within
+# one. (Verified reachable as of mid-2026; URLs drift over time, so prune/refresh
+# as needed.)
 FEEDS = [
+    # --- Dedicated human-rights / humanitarian monitors ---
     ("HRW", "https://www.hrw.org/rss/news"),
     ("Amnesty", "https://www.amnesty.org/en/latest/news/rss/"),
     ("UN News", "https://news.un.org/feed/subscribe/en/news/all/rss.xml"),
-    ("Reuters World", "https://feeds.reuters.com/Reuters/worldNews"),
+    ("ReliefWeb", "https://reliefweb.int/updates/rss.xml"),
+    # --- Independent global-news desks (broaden country coverage) ---
+    ("Al Jazeera", "https://www.aljazeera.com/xml/rss/all.xml"),
+    ("Guardian World", "https://www.theguardian.com/world/rss"),
+    ("France 24", "https://www.france24.com/en/rss"),
+    ("BBC World", "https://feeds.bbci.co.uk/news/world/rss.xml"),
 ]
 
 
@@ -208,15 +221,49 @@ def extract(text, title=None):
 BANDS = ["Stable","Monitoring","Emerging Concern","High Concern","Critical Concern"]
 
 
-def compute_band(severity, intensity):
-    if severity >= 5: base = "Critical Concern"
-    elif severity == 4: base = "High Concern"
-    elif severity == 3: base = "Emerging Concern"
-    elif severity == 2: base = "Monitoring"
-    else: base = "Stable"
-    if intensity >= 8 and base != "Critical Concern":
-        base = BANDS[min(BANDS.index(base) + 1, len(BANDS) - 1)]
-    return base
+def _evidence_tier(intensity, confidence):
+    """How well-corroborated the picture is, apart from how grave it is.
+
+    intensity  = number of distinct incidents in the window
+    confidence = independent-feed signal (0.3 = 1 feed, 0.5 = 2, 0.7 = 3, 0.85 = 4+)
+
+    'strong'   = many incidents AND at least two independent feeds
+    'moderate' = a small pattern beginning to corroborate
+    'thin'     = a single report, or several from a single source
+    """
+    if intensity >= 3 and confidence >= 0.5:
+        return "strong"
+    if intensity >= 2 and confidence >= 0.3:
+        return "moderate"
+    if intensity >= 1:
+        return "thin"
+    return "none"
+
+
+def compute_band(severity, intensity, confidence):
+    """Assign a headline band from gravity *and* corroboration.
+
+    Ava's own rule (see her Critical repertoire): the reports must be many,
+    severe, and in agreement. Severity measures how grave the worst harm is,
+    but on its own it cannot reach the upper bands -- a single grave-sounding
+    report, or a pile of reports from one source, is a watch item, not a
+    verdict. Reaching Critical requires the harm to be grave AND corroborated
+    across independent feeds."""
+    tier = _evidence_tier(intensity, confidence)
+    if tier == "none" or severity <= 0:
+        return "Stable"
+    if tier == "thin":
+        # One report (or one source), however grave its wording, stays a watch.
+        return "Monitoring"
+    if tier == "moderate":
+        if severity >= 4: return "High Concern"
+        if severity >= 3: return "Emerging Concern"
+        return "Monitoring"
+    # tier == "strong": grave harm, many reports, independent sources agreeing.
+    if severity >= 4: return "Critical Concern"
+    if severity >= 3: return "High Concern"
+    if severity >= 2: return "Emerging Concern"
+    return "Monitoring"
 
 
 def confidence_band(c):
@@ -247,14 +294,14 @@ def info_for(country):
 
 def assess(country, severity, intensity, confidence, trajectory):
     info = info_for(country)
-    band = compute_band(severity, intensity)
+    band = compute_band(severity, intensity, confidence)
     low_info = info in ("restricted", "closed") and intensity <= 1
     return {
         "country": country, "severity": severity, "intensity": intensity,
         "confidence": confidence, "confidence_band": confidence_band(confidence),
         "trajectory": trajectory, "info_availability": info,
         "headline_band": band, "low_information": low_info,
-        "methodology_version": "0.2.0",
+        "methodology_version": "0.3.0",
     }
 
 
@@ -465,7 +512,7 @@ def fetch_feeds():
     out = []
     for source, url in FEEDS:
         try:
-            req = urllib.request.Request(url, headers={"User-Agent": "OpenRightsMonitor/0.2"})
+            req = urllib.request.Request(url, headers={"User-Agent": "OpenRightsMonitor/0.3"})
             with urllib.request.urlopen(req, timeout=20) as r:
                 data = r.read()
             for title, link, summary, published in parse_feed_xml(data):
