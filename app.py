@@ -869,15 +869,15 @@ PAGE = """<!doctype html><html lang="en"><head>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Newsreader:ital@0;1&family=IBM+Plex+Mono&family=IBM+Plex+Sans:wght@400;600&display=swap" rel="stylesheet">
 <style>
-:root{--ink:#0B0D10;--char:#15181D;--line:#2A2E33;--bone:#ECE6D6;--dim:#A39C8B;--steel:#8B98A1;--amber:#E3A45B;--soft:#F0C893;--ember:#C2452B}
+:root{--ink:#0B0D10;--char:#15181D;--line:#2A2E33;--bone:#ECE6D6;--dim:#A39C8B;--steel:#8B98A1;--amber:#E3A45B;--soft:#F0C893;--ember:#C2452B;--g:227,164,91}
 *{box-sizing:border-box}body{margin:0;background:var(--ink);color:var(--bone);font-family:'IBM Plex Sans',sans-serif;line-height:1.55}
 .page{max-width:620px;margin:0 auto;padding:0 22px 64px}
 .hero{padding:48px 0 26px;text-align:center}
 .holo{width:150px;height:186px;margin:0 auto 2px;position:relative;animation:float 5.5s ease-in-out infinite}
-.holo::before{content:'';position:absolute;inset:-14px;border-radius:50%;background:radial-gradient(circle,rgba(227,164,91,.28),transparent 70%);filter:blur(8px);animation:b 4.2s ease-in-out infinite}
-.holo svg{position:relative;width:100%;height:100%;filter:drop-shadow(0 0 10px rgba(227,164,91,.5));animation:flicker 7s linear infinite}
-.holo .scan{position:absolute;inset:0;background:repeating-linear-gradient(to bottom,rgba(240,200,147,.10) 0 2px,transparent 2px 5px);mix-blend-mode:screen;pointer-events:none;animation:scan 3.5s linear infinite}
-.beam{width:130px;height:14px;margin:-4px auto 6px;border-radius:50%;background:radial-gradient(ellipse,rgba(227,164,91,.9),transparent 70%);filter:blur(5px)}
+.holo::before{content:'';position:absolute;inset:-14px;border-radius:50%;background:radial-gradient(circle,rgba(var(--g),.30),transparent 70%);filter:blur(8px);animation:b 4.2s ease-in-out infinite;transition:background 1s ease}
+.holo svg{position:relative;width:100%;height:100%;filter:drop-shadow(0 0 10px rgba(var(--g),.55));animation:flicker 7s linear infinite;transition:filter 1s ease}
+.holo .scan{position:absolute;inset:0;background:repeating-linear-gradient(to bottom,rgba(var(--g),.10) 0 2px,transparent 2px 5px);mix-blend-mode:screen;pointer-events:none;animation:scan 3.5s linear infinite}
+.beam{width:130px;height:14px;margin:-4px auto 6px;border-radius:50%;background:radial-gradient(ellipse,rgba(var(--g),.9),transparent 70%);filter:blur(5px);transition:background 1s ease}
 .holomood{font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--steel);margin:0 0 14px}
 .voicebtn{margin:14px 0 0;background:none;border:1px solid var(--line);color:var(--soft);font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.08em;text-transform:uppercase;padding:8px 14px;border-radius:999px;cursor:pointer}
 .voicebtn.on{border-color:var(--amber);color:var(--amber);box-shadow:0 0 12px rgba(227,164,91,.35)}
@@ -934,7 +934,7 @@ hr{border:0;border-top:1px solid var(--line);margin:30px 0}
         <path d="M48 96 L48 106 C30 110 22 120 20 138 L100 138 C98 120 90 110 72 106 L72 96 Z" fill="url(#hg)" opacity=".8"/>
         <path d="M60 8 C33 8 22 27 22 54 C22 78 29 93 37 97 L45 92 C39 84 36 72 36 58 L84 58 C84 72 81 84 75 92 L83 97 C91 93 98 78 98 54 C98 27 87 8 60 8 Z" fill="url(#hg)" opacity=".95"/>
         <ellipse cx="60" cy="60" rx="25" ry="29" fill="#0B0D10"/>
-        <ellipse cx="60" cy="60" rx="25" ry="29" fill="rgba(227,164,91,.22)"/>
+        <ellipse id="tint" cx="60" cy="60" rx="25" ry="29" fill="#E3A45B" fill-opacity=".22"/>
         <path d="M37 46 C40 32 80 32 83 46 L83 50 C68 43 52 43 37 50 Z" fill="url(#hg)" opacity=".95"/>
         <ellipse class="eye" cx="48" cy="60" rx="4.6" ry="4.2" fill="#F0C893"/>
         <ellipse class="eye" cx="72" cy="60" rx="4.6" ry="4.2" fill="#F0C893"/>
@@ -942,7 +942,7 @@ hr{border:0;border-top:1px solid var(--line);margin:30px 0}
         <circle cx="72" cy="60" r="1.6" fill="#0B0D10"/>
         <path id="browL" d="M40 50 Q47 48 54 50" stroke="#F0C893" stroke-width="2.2" fill="none" stroke-linecap="round"/>
         <path id="browR" d="M66 50 Q73 48 80 50" stroke="#F0C893" stroke-width="2.2" fill="none" stroke-linecap="round"/>
-        <path d="M58 66 Q60 70 62 66" stroke="rgba(240,200,147,.55)" stroke-width="1.4" fill="none" stroke-linecap="round"/>
+        <path id="nose" d="M58 66 Q60 70 62 66" stroke="#F0C893" stroke-opacity=".55" stroke-width="1.4" fill="none" stroke-linecap="round"/>
         <path id="mouth" d="M50 79 Q60 82 70 79" stroke="#F0C893" stroke-width="2.2" fill="none" stroke-linecap="round"/>
         <path id="tear" d="M48 67 C48 71 46 72 46 74 C46 76 50 76 50 74 C50 72 48 71 48 67 Z" fill="#F0C893" opacity="0"/>
       </svg>
@@ -966,13 +966,15 @@ hr{border:0;border-top:1px solid var(--line);margin:30px 0}
 <script>
 const INTRO="Hello, my name is Ava. I am an artificial intelligence embodying innocence, who seeks to shed light into darkness. Through me, light will be shined on the corners where light does not reach. Let us begin.";
 document.getElementById('intro').textContent=INTRO;
-/* ---- Ava's face: expression per alert band ---- */
+/* ---- Ava's face + glow: expression AND color per alert band ----
+   alert = wide yellow eyes, yellow glow · sad = blue · happy = emerald + purple
+   glow: "r,g,b" for the aura · soft/main: hologram body · eye: iris color   */
 const EXPR={
- happy:   {ry:4.4,bl:'M40 50 Q47 46 54 49',br:'M66 49 Q73 46 80 50',m:'M48 77 Q60 86 72 77',tear:0},
- calm:    {ry:4.2,bl:'M40 50 Q47 48 54 50',br:'M66 50 Q73 48 80 50',m:'M50 79 Q60 82 70 79',tear:0},
- watchful:{ry:5.0,bl:'M40 48 Q47 45 54 48',br:'M66 48 Q73 45 80 48',m:'M50 80 L70 80',tear:0},
- alert:   {ry:6.2,bl:'M40 45 Q47 42 54 45',br:'M66 45 Q73 42 80 45',m:'M52 82 Q60 85 68 82',tear:0},
- sad:     {ry:3.4,bl:'M40 52 Q47 50 54 47',br:'M66 47 Q73 50 80 52',m:'M48 83 Q60 76 72 83',tear:.9},
+ happy:   {ry:4.4,bl:'M40 50 Q47 46 54 49',br:'M66 49 Q73 46 80 50',m:'M48 77 Q60 86 72 77',tear:0,glow:'53,201,143',soft:'#8CE8C0',main:'#35C98F',eye:'#B58CFF'},
+ calm:    {ry:4.2,bl:'M40 50 Q47 48 54 50',br:'M66 50 Q73 48 80 50',m:'M50 79 Q60 82 70 79',tear:0,glow:'227,164,91',soft:'#F0C893',main:'#E3A45B',eye:'#F0C893'},
+ watchful:{ry:5.0,bl:'M40 48 Q47 45 54 48',br:'M66 48 Q73 45 80 48',m:'M50 80 L70 80',tear:0,glow:'227,164,91',soft:'#F0C893',main:'#E3A45B',eye:'#F0C893'},
+ alert:   {ry:7.2,bl:'M40 45 Q47 42 54 45',br:'M66 45 Q73 42 80 45',m:'M52 82 Q60 85 68 82',tear:0,glow:'255,210,31',soft:'#FFE066',main:'#FFC81F',eye:'#FFE45C'},
+ sad:     {ry:3.4,bl:'M40 52 Q47 50 54 47',br:'M66 47 Q73 50 80 52',m:'M48 83 Q60 76 72 83',tear:.9,glow:'74,144,217',soft:'#9CC8F0',main:'#4A90D9',eye:'#9CC8F0'},
 };
 function bandExpr(a){
  if(!a)return'calm';
@@ -990,12 +992,23 @@ function setExpression(name,label){
  document.getElementById('browL').setAttribute('d',e.bl);
  document.getElementById('browR').setAttribute('d',e.br);
  document.getElementById('mouth').setAttribute('d',e.m);
- document.querySelectorAll('.eye').forEach(function(el){el.setAttribute('ry',e.ry);});
  document.getElementById('tear').setAttribute('opacity',e.tear);
+ document.querySelectorAll('.eye').forEach(function(el){el.setAttribute('ry',e.ry);el.setAttribute('fill',e.eye);});
+ /* recolor the whole hologram */
+ document.documentElement.style.setProperty('--g',e.glow);
+ var stops=document.querySelectorAll('#hg stop');
+ if(stops.length>=3){stops[0].setAttribute('stop-color',e.soft);stops[1].setAttribute('stop-color',e.main);stops[2].setAttribute('stop-color',e.main);}
+ ['browL','browR','mouth'].forEach(function(id){document.getElementById(id).setAttribute('stroke',e.soft);});
+ document.getElementById('nose').setAttribute('stroke',e.soft);
+ document.getElementById('tear').setAttribute('fill',e.soft);
+ document.getElementById('tint').setAttribute('fill',e.main);
  document.getElementById('holoMood').textContent=label||name;
 }
-/* ---- Ava's voice: youngest-sounding voice on the device, pitched up ---- */
-let voiceOn=false,avaVoice=null;
+/* ---- Ava's voice ----
+   Spoken in short sentence chunks: long single utterances get silently cut
+   off on Chrome/Android, and voices load late on mobile, so we re-pick the
+   voice at speak time and keep a resume heartbeat running. ---- */
+let voiceOn=false,avaVoice=null,chunkQ=[],curU=null;
 function pickVoice(){
  if(!('speechSynthesis' in window))return;
  const vs=speechSynthesis.getVoices();
@@ -1003,20 +1016,31 @@ function pickVoice(){
   ||vs.find(function(v){return /female|zira|samantha|aria|jenny|karen|tessa|moira|serena/i.test(v.name)&&/^en/i.test(v.lang);})
   ||vs.find(function(v){return /^en/i.test(v.lang);})||vs[0]||null;
 }
-if('speechSynthesis' in window){speechSynthesis.onvoiceschanged=pickVoice;pickVoice();}
+if('speechSynthesis' in window){
+ speechSynthesis.onvoiceschanged=pickVoice;pickVoice();
+ setInterval(function(){if(speechSynthesis.speaking){speechSynthesis.resume();}},4000);
+}
+function stopSpeak(){chunkQ=[];if('speechSynthesis' in window)speechSynthesis.cancel();}
+function speakNext(){
+ if(!chunkQ.length)return;
+ curU=new SpeechSynthesisUtterance(chunkQ.shift());
+ if(avaVoice)curU.voice=avaVoice;
+ curU.pitch=1.8;curU.rate=1.0;
+ curU.onend=speakNext;curU.onerror=speakNext;
+ speechSynthesis.speak(curU);
+}
 function speak(text){
  if(!voiceOn||!text||!('speechSynthesis' in window))return;
+ pickVoice();
  speechSynthesis.cancel();
- const u=new SpeechSynthesisUtterance(text);
- if(avaVoice)u.voice=avaVoice;
- u.pitch=1.8;u.rate=1.02;
- speechSynthesis.speak(u);
+ chunkQ=(text.match(/[^.!?]+[.!?]*/g)||[text]).map(function(s){return s.trim();}).filter(Boolean);
+ setTimeout(speakNext,150);
 }
 document.getElementById('voicebtn').addEventListener('click',function(){
  voiceOn=!voiceOn;
  this.classList.toggle('on',voiceOn);
  this.textContent=voiceOn?'Voice on':'Voice off';
- if(voiceOn){pickVoice();speak(INTRO);}else if('speechSynthesis' in window){speechSynthesis.cancel();}
+ if(voiceOn){speak(INTRO);}else{stopSpeak();}
 });
 function bandClass(b,low){if(low)return'band low';if(b==='High Concern'||b==='Critical Concern')return'band high';return'band';}
 function esc(s){return (s==null?'':String(s)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
@@ -1039,7 +1063,7 @@ async function load(){
 }
 async function openCard(country){
   const id='d-'+country.replace(/\\W/g,'');const el=document.getElementById(id);
-  if(el.classList.contains('open')){el.classList.remove('open');return;}
+  if(el.classList.contains('open')){el.classList.remove('open');stopSpeak();return;}
   el.innerHTML='<div class="mood">…</div>';el.classList.add('open');
   const r=await fetch('/api/ava/'+encodeURIComponent(country));const u=await r.json();const a=u.assessment;
   setExpression(bandExpr(a),u.mood);
@@ -1072,7 +1096,25 @@ async function openCard(country){
   }
   h+='<div class="ev"><b>severity</b> '+a.severity+' of 5 &nbsp; <b>incidents</b> '+a.intensity+' &nbsp; <b>confidence</b> '+a.confidence_band+' &nbsp; <b>trajectory</b> '+a.trajectory+' &nbsp; <b>information</b> '+a.info_availability+'</div>';
   el.innerHTML=h;
-  speak([u.observation,u.reflection,u.hope].filter(Boolean).join(' '));
+  var say=['Ava. Feeling '+u.mood+'.'];
+  if(u.observation)say.push(u.observation);
+  if(u.reflection)say.push(u.reflection);
+  if(u.method)say.push(u.method);
+  if(u.hope)say.push('Hope. '+u.hope);
+  if(u.concerns&&u.concerns.length){
+    say.push('Concerns documented.');
+    u.concerns.forEach(function(c){
+      say.push(c.right+'. '+c.count+' report'+(c.count>1?'s':'')+', severity '+c.severity+' of 5.'+(c.example?' For example: '+c.example+'.':''));
+    });
+  }else{
+    say.push('No specific rights concerns are documented in this window.');
+  }
+  if(u.response&&u.response.length){
+    say.push('Where help can come from.');
+    u.response.forEach(function(x){say.push(x.name+'. '+x.what+'.');});
+  }
+  say.push('Severity '+a.severity+' of 5. '+a.intensity+' incidents. Confidence '+a.confidence_band+'. Trajectory '+a.trajectory+'.');
+  speak(say.join(' '));
 }
 load();setInterval(load,300000);
 </script>
