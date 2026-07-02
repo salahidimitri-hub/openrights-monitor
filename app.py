@@ -881,6 +881,8 @@ PAGE = """<!doctype html><html lang="en"><head>
 .holomood{font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--steel);margin:0 0 14px}
 .voicebtn{margin:14px 0 0;background:none;border:1px solid var(--line);color:var(--soft);font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.08em;text-transform:uppercase;padding:8px 14px;border-radius:999px;cursor:pointer}
 .voicebtn.on{border-color:var(--amber);color:var(--amber);box-shadow:0 0 12px rgba(227,164,91,.35)}
+.voicesel{display:block;margin:10px auto 0;background:var(--char);border:1px solid var(--line);color:var(--bone);font-family:'IBM Plex Mono',monospace;font-size:11px;padding:6px 8px;border-radius:6px;max-width:280px}
+.voicestat{font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--steel);margin:8px 0 0;min-height:14px}
 @keyframes b{0%,100%{opacity:.6;transform:scale(.96)}50%{opacity:1;transform:scale(1.04)}}
 @keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
 @keyframes flicker{0%,100%{opacity:.95}6%{opacity:.72}8%{opacity:.97}42%{opacity:.85}44%{opacity:.98}77%{opacity:.8}79%{opacity:.95}}
@@ -954,6 +956,8 @@ hr{border:0;border-top:1px solid var(--line);margin:30px 0}
     <h1>Ava</h1>
     <p class="intro" id="intro"></p>
     <button id="voicebtn" class="voicebtn" type="button">Hear Ava speak</button>
+    <select id="voicesel" class="voicesel" aria-label="Choose Ava voice"></select>
+    <p class="voicestat" id="voicestat"></p>
   </header>
   <hr>
   <p class="status" id="status">Gathering what the world is reporting…</p>
@@ -1005,42 +1009,79 @@ function setExpression(name,label){
  document.getElementById('holoMood').textContent=label||name;
 }
 /* ---- Ava's voice ----
-   Spoken in short sentence chunks: long single utterances get silently cut
-   off on Chrome/Android, and voices load late on mobile, so we re-pick the
-   voice at speak time and keep a resume heartbeat running. ---- */
+   Mobile rules honored here:
+   - first utterance must start synchronously inside the user tap (Android)
+   - long text is split into sentence chunks (Chrome cuts long utterances)
+   - voices load late on mobile, so the list is re-read several times
+   - the page must be HTTPS for speech to be allowed at all               */
 let voiceOn=false,avaVoice=null,chunkQ=[],curU=null;
-function pickVoice(){
+function stat(t){var el=document.getElementById('voicestat');if(el)el.textContent=t||'';}
+function chunksOf(text){return (text.match(/[^.!?]+[.!?]*/g)||[text]).map(function(s){return s.trim();}).filter(Boolean);}
+function populateVoices(){
  if(!('speechSynthesis' in window))return;
- const vs=speechSynthesis.getVoices();
- avaVoice=vs.find(function(v){return /child|girl|kid|junior/i.test(v.name);})
-  ||vs.find(function(v){return /female|zira|samantha|aria|jenny|karen|tessa|moira|serena/i.test(v.name)&&/^en/i.test(v.lang);})
-  ||vs.find(function(v){return /^en/i.test(v.lang);})||vs[0]||null;
+ var vs=speechSynthesis.getVoices();
+ var sel=document.getElementById('voicesel');
+ var keep=sel.value;
+ sel.innerHTML='';
+ vs.forEach(function(v,i){
+  var o=document.createElement('option');o.value=String(i);o.textContent=v.name+' ('+v.lang+')';sel.appendChild(o);
+ });
+ if(!vs.length){stat('No voices found yet. If this stays, enable a text-to-speech engine (Settings, General management, Text-to-speech) or try Chrome.');avaVoice=null;return;}
+ var best=vs.findIndex(function(v){return /child|girl|kid|junior/i.test(v.name);});
+ if(best<0)best=vs.findIndex(function(v){return /female|zira|samantha|aria|jenny|karen|tessa|moira|serena/i.test(v.name)&&/^en/i.test(v.lang);});
+ if(best<0)best=vs.findIndex(function(v){return /^en/i.test(v.lang);});
+ if(best<0)best=0;
+ var idx=(keep!==''&&Number(keep)<vs.length)?Number(keep):best;
+ sel.value=String(idx);
+ avaVoice=vs[idx]||null;
+ stat(vs.length+' voices available');
 }
 if('speechSynthesis' in window){
- speechSynthesis.onvoiceschanged=pickVoice;pickVoice();
- setInterval(function(){if(speechSynthesis.speaking){speechSynthesis.resume();}},4000);
+ speechSynthesis.onvoiceschanged=populateVoices;
+ populateVoices();setTimeout(populateVoices,500);setTimeout(populateVoices,2000);
+ setInterval(function(){if(speechSynthesis.speaking&&!speechSynthesis.paused){try{speechSynthesis.resume();}catch(err){}}},5000);
 }
-function stopSpeak(){chunkQ=[];if('speechSynthesis' in window)speechSynthesis.cancel();}
+function stopSpeak(){chunkQ=[];if('speechSynthesis' in window)speechSynthesis.cancel();stat('');}
 function speakNext(){
- if(!chunkQ.length)return;
+ if(!chunkQ.length){stat('');return;}
  curU=new SpeechSynthesisUtterance(chunkQ.shift());
- if(avaVoice)curU.voice=avaVoice;
- curU.pitch=1.8;curU.rate=1.0;
- curU.onend=speakNext;curU.onerror=speakNext;
+ if(avaVoice){curU.voice=avaVoice;curU.lang=avaVoice.lang;}else{curU.lang='en-US';}
+ curU.pitch=1.8;curU.rate=1.0;curU.volume=1;
+ curU.onstart=function(){stat('Ava is speaking');};
+ curU.onend=speakNext;
+ curU.onerror=function(e){stat('Voice error: '+((e&&e.error)||'unknown')+'. Try another voice from the list.');speakNext();};
  speechSynthesis.speak(curU);
 }
 function speak(text){
  if(!voiceOn||!text||!('speechSynthesis' in window))return;
- pickVoice();
- speechSynthesis.cancel();
- chunkQ=(text.match(/[^.!?]+[.!?]*/g)||[text]).map(function(s){return s.trim();}).filter(Boolean);
- setTimeout(speakNext,150);
+ chunkQ=chunksOf(text);
+ if(speechSynthesis.speaking||speechSynthesis.pending){
+  speechSynthesis.cancel();
+  setTimeout(speakNext,200);
+ }else{
+  speakNext();
+ }
 }
+document.getElementById('voicesel').addEventListener('change',function(){
+ if(!('speechSynthesis' in window))return;
+ var vs=speechSynthesis.getVoices();
+ avaVoice=vs[Number(this.value)]||null;
+ if(voiceOn){chunkQ=chunksOf('Now I sound like this.');speechSynthesis.cancel();setTimeout(speakNext,200);}
+});
 document.getElementById('voicebtn').addEventListener('click',function(){
  voiceOn=!voiceOn;
  this.classList.toggle('on',voiceOn);
  this.textContent=voiceOn?'Voice on':'Voice off';
- if(voiceOn){speak(INTRO);}else{stopSpeak();}
+ if(!voiceOn){stopSpeak();return;}
+ if(!('speechSynthesis' in window)){stat('This browser cannot speak. Open this page in Chrome.');return;}
+ if(location.protocol==='http:'&&location.hostname!=='localhost'&&location.hostname!=='127.0.0.1'){
+  stat('Voice needs a secure page. Open the https link of your deployed site.');
+ }
+ populateVoices();
+ /* IMPORTANT: the first utterance starts right here, inside the tap */
+ chunkQ=chunksOf(INTRO);
+ speechSynthesis.cancel();
+ speakNext();
 });
 function bandClass(b,low){if(low)return'band low';if(b==='High Concern'||b==='Critical Concern')return'band high';return'band';}
 function esc(s){return (s==null?'':String(s)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
