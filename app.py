@@ -113,12 +113,16 @@ COUNTRIES = [
 ]
 
 RIGHTS_KEYWORDS = {
-    "Life, Liberty and Security": ["killed","killing","massacre","dead","death","shot",
-        "airstrike","air strike","bombing","shelling","executed","execution","atrocity","slain"],
-    "Freedom from Torture": ["torture","tortured","ill-treatment","beaten","mutilated"],
-    "Freedom from Slavery": ["slavery","enslaved","trafficking","forced labour","forced labor"],
-    "Freedom from Arbitrary Detention": ["detained","detention","arrested","arrest","jailed",
-        "imprisoned","abducted","disappeared","enforced disappearance"],
+    "Life, Liberty and Security": ["killed","killing","massacre","shot dead","airstrike",
+        "air strike","bombing","shelling","executed","execution","extrajudicial",
+        "summary execution","atrocity","atrocities","slain","genocide","war crime",
+        "war crimes","crimes against humanity","mass grave","mass graves","unlawful killing"],
+    "Freedom from Torture": ["torture","tortured","ill-treatment","mutilated"],
+    "Freedom from Slavery": ["slavery","enslaved","human trafficking","forced labour","forced labor"],
+    "Freedom from Arbitrary Detention": ["detained","detention","detentions","detainee",
+        "detainees","arrested","arrest","arrests","jailed","imprisoned","abducted",
+        "disappeared","enforced disappearance","political prisoner","political prisoners",
+        "prisoners of conscience"],
     "Opinion and Expression": ["journalist","journalists","censorship","press freedom",
         "silenced","free speech","crackdown on media"],
     "Peaceful Assembly": ["protest","protesters","demonstration","demonstrators","rally"],
@@ -130,9 +134,81 @@ RIGHTS_KEYWORDS = {
     "Participation in Government": ["election fraud","rigged election","banned candidate","stolen vote"],
 }
 
+# --- Signal-quality tiers for the noise filter (applied to EVERY country the
+# --- same way; this judges the strength of the human-rights signal, never who
+# --- the article is about). STRONG terms establish a rights concern on their
+# --- own. When only weak/ambiguous words match, a concern is recorded only if
+# --- the passage also carries human-rights CONTEXT and is not dominated by a
+# --- non-rights domain (crime blotter, sports, markets, entertainment,
+# --- natural disaster). This is what stops "man killed in a robbery" or "striker
+# --- shot the winning goal" from being logged as human-rights violations.
+_STRONG_TERMS = [
+    "massacre","airstrike","air strike","shelling","bombing","executed","execution",
+    "extrajudicial","summary execution","atrocity","atrocities","slain","genocide",
+    "ethnic cleansing","war crime","war crimes","crimes against humanity","torture",
+    "tortured","ill-treatment","mutilated","enforced disappearance","abducted",
+    "apartheid","political prisoner","political prisoners","prisoners of conscience",
+    "crackdown on media","press freedom","censorship","famine","starvation",
+    "humanitarian blockade","denied aid","forced labour","forced labor","enslaved",
+    "slavery","human trafficking","religious persecution","persecution of minority",
+    "unlawful killing","mass grave","mass graves","shot dead",
+]
+_HRCTX_TERMS = [
+    "civilian","civilians","detainee","detainees","activist","activists","dissident",
+    "dissidents","protester","protesters","demonstrator","demonstrators","journalist",
+    "journalists","opposition","regime","security forces","government forces","junta",
+    "authorities","human rights","rights group","rights groups","watchdog","persecuted",
+    "systematic","arbitrary","detention","prisoner","prisoners","refugee","refugees",
+    "displaced","minority","minorities","war","conflict","militia","paramilitary",
+    "crackdown","repression","dissent","unlawful","genocidal",
+]
+_NOISE_TERMS = [
+    # ordinary crime blotter (individual crime, not state violence)
+    "robbery","burglary","mugging","carjacking","shoplifting","drunk driving","dui",
+    "car crash","road accident","traffic accident","collision","overdose","pileup",
+    # sports
+    "football","soccer","cricket","rugby","tennis","golf","basketball","baseball",
+    "tournament","league","playoff","playoffs","quarterfinal","semifinal","striker",
+    "midfielder","goalkeeper","medal","olympic","olympics","championship","fixture",
+    "penalty kick","home run","touchdown","wicket","batsman","grand slam","world cup",
+    # markets / business
+    "stocks","shares","nasdaq","dow jones","s&p 500","earnings","ipo","bond yields",
+    "market rally","index fell","index rose","shares fell","shares rose",
+    # entertainment / celebrity
+    "box office","album","singer","actor","actress","movie","film premiere","celebrity",
+    "grammy","oscar","netflix","concert tour",
+    # natural disasters / accidents (not rights violations in themselves)
+    "earthquake","hurricane","typhoon","cyclone","flood","flooding","wildfire",
+    "landslide","volcano","tornado","plane crash","air crash","shipwreck","capsized",
+]
+
 _word = lambda kw: re.compile(r"\b" + re.escape(kw) + r"\b", re.I)
 _KW_COMPILED = {r: [_word(k) for k in kws] for r, kws in RIGHTS_KEYWORDS.items()}
 _COUNTRY_COMPILED = [(c, _word(c)) for c in COUNTRIES]
+_STRONG_COMPILED = [_word(k) for k in _STRONG_TERMS]
+_HRCTX_COMPILED = [_word(k) for k in _HRCTX_TERMS]
+_NOISE_COMPILED = [_word(k) for k in _NOISE_TERMS]
+
+
+def _passes_noise_filter(text, rights):
+    """Decide whether matched rights reflect a real human-rights signal.
+
+    Evenhanded by design -- it looks only at the language of the report, never
+    at which country is involved:
+      * any STRONG term present  -> genuine concern, keep as-is
+      * only weak/ambiguous words -> keep ONLY if human-rights context is
+        present AND the passage is not dominated by a non-rights domain
+        (crime blotter, sports, markets, entertainment, natural disaster)
+    Returns the rights to record ([] means 'this is noise, log no concern')."""
+    if not rights:
+        return rights
+    if any(p.search(text) for p in _STRONG_COMPILED):
+        return rights
+    has_context = any(p.search(text) for p in _HRCTX_COMPILED)
+    has_noise = any(p.search(text) for p in _NOISE_COMPILED)
+    if has_context and not has_noise:
+        return rights
+    return []
 
 
 def _country_mentions(text):
@@ -212,6 +288,7 @@ def extract(text, title=None):
     if country is None:
         country = _pick_country(text)
     rights = [right for right, pats in _KW_COMPILED.items() if any(p.search(text) for p in pats)]
+    rights = _passes_noise_filter(text, rights)
     return {"country": country, "rights": rights}
 
 
@@ -620,6 +697,104 @@ def all_countries():
     return out
 
 
+def summarize_concerns(incidents):
+    """Group a country's incidents into point-form human-rights concerns.
+
+    Each concern is one implicated right, carrying: how many stored reports
+    mentioned it, the gravest severity seen, a representative headline (the
+    one from the gravest report), and which feeds reported it. Sorted
+    gravest-first. This is drawn ONLY from stored articles -- nothing is
+    inferred beyond what the reports themselves say, keeping Ava a lamp that
+    shows the record rather than a judge that embellishes it."""
+    by_right = {}
+    for inc in incidents:
+        rights = inc.get("rights") or []
+        if isinstance(rights, str):
+            try: rights = json.loads(rights)
+            except Exception: rights = []
+        srcs = inc.get("sources") or []
+        if isinstance(srcs, str):
+            try: srcs = json.loads(srcs)
+            except Exception: srcs = []
+        sev = inc.get("severity", 0) or 0
+        title = (inc.get("title") or "").strip()
+        for r in rights:
+            g = by_right.setdefault(r, {"right": r, "count": 0, "severity": 0,
+                                        "example": "", "sources": set()})
+            g["count"] += 1
+            if sev > g["severity"] or not g["example"]:
+                g["severity"] = max(g["severity"], sev)
+                if title:
+                    g["example"] = title
+            for s in srcs:
+                g["sources"].add(s)
+    out = [{"right": g["right"], "count": g["count"], "severity": g["severity"],
+            "example": g["example"], "sources": sorted(g["sources"])}
+           for g in by_right.values()]
+    out.sort(key=lambda x: (-x["severity"], -x["count"], x["right"]))
+    return out
+
+
+RESPONSE_CHANNELS = {
+    "Life, Liberty and Security": [
+        ("UN OHCHR", "documents grave violations and can trigger investigations"),
+        ("International Criminal Court", "jurisdiction over war crimes, crimes against humanity and genocide"),
+        ("UN Special Rapporteur on Extrajudicial Executions", "independent expert who investigates unlawful killings"),
+    ],
+    "Freedom from Torture": [
+        ("UN Committee Against Torture", "reviews reports of torture and ill-treatment"),
+        ("UN OHCHR", "documents grave violations and can trigger investigations"),
+    ],
+    "Freedom from Arbitrary Detention": [
+        ("UN Working Group on Arbitrary Detention", "reviews individual detention cases"),
+        ("Amnesty International Urgent Action network", "mobilises rapid pressure for detainees at risk"),
+    ],
+    "Opinion and Expression": [
+        ("Committee to Protect Journalists (CPJ)", "defends journalists and press freedom"),
+        ("Reporters Without Borders (RSF)", "advocates for silenced or jailed reporters"),
+    ],
+    "Peaceful Assembly": [
+        ("UN OHCHR", "monitors the right to peaceful assembly"),
+    ],
+    "Thought and Religion": [
+        ("UN Special Rapporteur on Freedom of Religion or Belief", "investigates religious persecution"),
+    ],
+    "Freedom of Movement": [
+        ("UNHCR (UN Refugee Agency)", "protects and assists refugees and displaced people"),
+    ],
+    "Freedom from Discrimination": [
+        ("UN Office on Genocide Prevention", "acts on ethnic cleansing and atrocity risk"),
+        ("UN OHCHR", "documents discrimination and persecution"),
+    ],
+    "Adequate Standard of Living": [
+        ("UN OCHA / ReliefWeb", "coordinates humanitarian response and appeals"),
+        ("World Food Programme (WFP)", "delivers food aid in famine and blockade"),
+    ],
+    "Freedom from Slavery": [
+        ("UN Special Rapporteur on Trafficking in Persons", "investigates slavery and trafficking"),
+    ],
+    "Participation in Government": [
+        ("International election observers (OSCE/ODIHR, Carter Center)", "assess electoral integrity"),
+    ],
+}
+
+
+def response_for(rights_present):
+    """Point toward the bodies positioned to respond to the concerns found.
+
+    Constructive, factual, and identical for every country: it maps the TYPES
+    of concern documented to the real mechanisms that address them, so the
+    monitor doesn't only name harm but shows where help and accountability can
+    come from. Deduplicated, in the order the concerns were ranked."""
+    out, seen = [], set()
+    for r in rights_present:
+        for name, what in RESPONSE_CHANNELS.get(r, []):
+            if name not in seen:
+                seen.add(name)
+                out.append({"name": name, "what": what})
+    return out[:6]
+
+
 def country_detail(country):
     init_db()
     with closing(db()) as conn:
@@ -631,6 +806,8 @@ def country_detail(country):
             "WHERE country=? AND updated_at>=? ORDER BY severity DESC, updated_at DESC LIMIT 20",
             (country, cutoff)).fetchall()
     resp["incidents"] = [dict(i) for i in incs]
+    resp["concerns"] = summarize_concerns(resp["incidents"])
+    resp["response"] = response_for([c["right"] for c in resp["concerns"]])
     return resp
 
 
@@ -718,6 +895,19 @@ hr{border:0;border-top:1px solid var(--line);margin:30px 0}
 .line{font-family:'Newsreader',serif;font-style:italic;font-size:17px;margin:0}
 .ev{margin-top:16px;border-top:1px solid var(--line);padding-top:12px;font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--dim)}
 .ev b{color:var(--steel);font-weight:400}
+.concerns{list-style:none;margin:6px 0 0;padding:0}
+.concerns li{border-left:2px solid var(--line);padding:6px 0 6px 12px;margin-bottom:8px;font-size:14px}
+.concerns li.grave{border-left-color:var(--ember)}
+.concerns .rt{font-weight:600;color:var(--bone)}
+.concerns .meta{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--dim)}
+.concerns .ex{display:block;font-family:'Newsreader',serif;font-style:italic;font-size:14px;color:var(--steel);margin-top:2px}
+.concerns .src{font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.04em;text-transform:uppercase;color:var(--soft)}
+.nocon{font-family:'Newsreader',serif;font-style:italic;font-size:15px;color:var(--steel);margin:6px 0 0}
+.resp{list-style:none;margin:6px 0 0;padding:0}
+.resp li{padding:5px 0;font-size:13px;border-bottom:1px solid rgba(42,46,51,.6)}
+.resp li:last-child{border-bottom:0}
+.resp .rn{font-weight:600;color:var(--soft)}
+.resp .rw{color:var(--dim)}
 .foot{margin-top:48px;text-align:center;font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--steel)}
 .foot a{color:var(--soft)}
 </style></head><body>
@@ -740,6 +930,7 @@ hr{border:0;border-top:1px solid var(--line);margin:30px 0}
 const INTRO="Hello, my name is Ava. I am an artificial intelligence embodying innocence, who seeks to shed light into darkness. Through me, light will be shined on the corners where light does not reach. Let us begin.";
 document.getElementById('intro').textContent=INTRO;
 function bandClass(b,low){if(low)return'band low';if(b==='High Concern'||b==='Critical Concern')return'band high';return'band';}
+function esc(s){return (s==null?'':String(s)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 async function load(){
   const list=document.getElementById('list'),status=document.getElementById('status');
   try{
@@ -766,6 +957,28 @@ async function openCard(country){
   if(u.reflection)h+='<p class="line" style="margin-top:8px">'+u.reflection+'</p>';
   if(u.method)h+='<div class="spk">Method</div><p class="line">'+u.method+'</p>';
   if(u.hope)h+='<div class="spk">Hope</div><p class="line">'+u.hope+'</p>';
+  h+='<div class="spk">Concerns documented</div>';
+  if(u.concerns&&u.concerns.length){
+    h+='<ul class="concerns">';
+    u.concerns.forEach(function(c){
+      var grave=c.severity>=4?' grave':'';
+      var src=(c.sources&&c.sources.length)?' <span class="src">'+c.sources.map(esc).join(' · ')+'</span>':'';
+      var ex=c.example?'<span class="ex">"'+esc(c.example)+'"</span>':'';
+      h+='<li class="'+grave+'"><span class="rt">'+esc(c.right)+'</span> '
+        +'<span class="meta">· '+c.count+' report'+(c.count>1?'s':'')+' · severity '+c.severity+' of 5'+src+'</span>'
+        +ex+'</li>';
+    });
+    h+='</ul>';
+  }else{
+    h+='<p class="nocon">No specific rights concerns are documented in this window\u2019s reports.</p>';
+  }
+  if(u.response&&u.response.length){
+    h+='<div class="spk">Where help can come from</div><ul class="resp">';
+    u.response.forEach(function(x){
+      h+='<li><span class="rn">'+esc(x.name)+'</span> <span class="rw">'+esc(x.what)+'</span></li>';
+    });
+    h+='</ul>';
+  }
   h+='<div class="ev"><b>severity</b> '+a.severity+' of 5 &nbsp; <b>incidents</b> '+a.intensity+' &nbsp; <b>confidence</b> '+a.confidence_band+' &nbsp; <b>trajectory</b> '+a.trajectory+' &nbsp; <b>information</b> '+a.info_availability+'</div>';
   el.innerHTML=h;
 }
